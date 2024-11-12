@@ -1,64 +1,83 @@
 <?php
 
+// app/Http/Controllers/LinkController.php
+
 namespace App\Http\Controllers;
 
+use App\Models\Link;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
 
 class LinkController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
+
     public function index()
     {
-        //
+        $links = Link::where('user_id', Auth::id())->get();
+        return view('links.index', compact('links'));
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
-        //
+        return view('links.create');
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        //
+        $request->validate([
+            'original_url' => 'required|url',
+            'custom_domain' => 'nullable|url|unique:links,custom_domain',
+        ]);
+
+        $shortened_url = Str::random(6);
+
+        // Store the link
+        Link::create([
+            'user_id' => Auth::id(),
+            'original_url' => $request->original_url,
+            'shortened_url' => $shortened_url,
+            'custom_domain' => $request->custom_domain,
+        ]);
+
+        return redirect()->route('links.index')->with('success', 'Link shortened successfully!');
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+    public function edit(Link $link)
     {
-        //
+        return view('links.edit', compact('link'));
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
+    public function update(Request $request, Link $link)
     {
-        //
+        $request->validate([
+            'custom_domain' => 'nullable|url|unique:links,custom_domain,' . $link->id,
+        ]);
+
+        $link->update([
+            'custom_domain' => $request->custom_domain,
+        ]);
+
+        return redirect()->route('links.index')->with('success', 'Link updated successfully!');
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
+    public function destroy(Link $link)
     {
-        //
+        $link->delete();
+        return redirect()->route('links.index')->with('success', 'Link deleted successfully!');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
+    public function redirect($shortened_url)
     {
-        //
+        $link = Link::where('shortened_url', $shortened_url)->first();
+
+        if ($link) {
+            if ($link->custom_domain) {
+                return redirect()->to($link->custom_domain);
+            }
+            return redirect()->to($link->original_url);
+        }
+
+        return redirect()->route('links.index')->withErrors('Link not found.');
     }
 }
